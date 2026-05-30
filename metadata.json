@@ -1,0 +1,6 @@
+{
+  "name": "Weather",
+  "description": "A responsive Material 3 weather application featuring beautiful dynamic cartoon weather sceneries, customizable floating control dock, 24-hour horizontal forecast, and 7-day vertical forecast.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
