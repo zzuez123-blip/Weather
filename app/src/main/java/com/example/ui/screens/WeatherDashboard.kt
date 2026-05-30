@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.WeatherDataGenerator
 import com.example.data.WeatherState
 import com.example.ui.components.*
@@ -28,11 +29,19 @@ import com.example.ui.components.*
 fun WeatherDashboard(
     modifier: Modifier = Modifier
 ) {
-    // 1. Unified Application States
+    // 1. Unified Jetpack ViewModel & States
+    val viewModel: WeatherViewModel = viewModel()
+
     var selectedTab by remember { mutableStateOf(DockTab.HOME) }
-    var activeState by remember { mutableStateOf(WeatherState.SUNNY) }
-    var activeLocationName by remember { mutableStateOf("Kyoto, Japan") }
     
+    val activeState by viewModel.activeWeatherState.collectAsState()
+    val activeLocationName by viewModel.activeLocationName.collectAsState()
+    val activeTemp by viewModel.activeTemp.collectAsState()
+    val hourlyList by viewModel.hourlyForecasts.collectAsState()
+    val dailyList by viewModel.dailyForecasts.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMsg by viewModel.errorMsg.collectAsState()
+
     // Default customizable dock configuration state
     var dockConfig by remember { 
         mutableStateOf(DockConfig(
@@ -42,10 +51,6 @@ fun WeatherDashboard(
             isBlurEnabled = true
         )) 
     }
-
-    // Dynamic forecasts matching simulated climatic conditions
-    val hourlyList = remember(activeState) { WeatherDataGenerator.getHourlyForecasts(activeState) }
-    val dailyList = remember(activeState) { WeatherDataGenerator.get7DayForecast(activeState) }
 
     Box(
         modifier = modifier
@@ -62,8 +67,11 @@ fun WeatherDashboard(
                     HomeView(
                         locationName = activeLocationName,
                         state = activeState,
+                        temp = activeTemp,
                         hourlyList = hourlyList,
                         dailyList = dailyList,
+                        isLoading = isLoading,
+                        errorMsg = errorMsg,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -79,11 +87,8 @@ fun WeatherDashboard(
                 }
                 DockTab.LOCATIONS -> {
                     LocationsContent(
-                        activeState = activeState,
-                        activeLocationName = activeLocationName,
-                        onLocationSelected = { name, state ->
-                            activeLocationName = name
-                            activeState = state
+                        viewModel = viewModel,
+                        onLocationSelected = {
                             selectedTab = DockTab.HOME // Transition back to home layout
                         },
                         modifier = Modifier
@@ -96,7 +101,7 @@ fun WeatherDashboard(
                         config = dockConfig,
                         onConfigChange = { dockConfig = it },
                         simulatedState = activeState,
-                        onStateChange = { activeState = it },
+                        onStateChange = { viewModel.loadFallbackSimulation(it) },
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(bottom = 60.dp)
@@ -122,8 +127,11 @@ fun WeatherDashboard(
 fun HomeView(
     locationName: String,
     state: WeatherState,
+    temp: Int,
     hourlyList: List<com.example.data.HourlyForecast>,
     dailyList: List<com.example.data.DailyForecast>,
+    isLoading: Boolean,
+    errorMsg: String?,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -133,6 +141,37 @@ fun HomeView(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Subtle Loader overlay indicator
+        if (isLoading) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+            )
+        }
+
+        if (errorMsg != null) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                )
+            ) {
+                Text(
+                    text = errorMsg,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+        }
+
         // A. Integrated Scenic Header with text content overlay
         Box(
             modifier = Modifier
@@ -218,7 +257,7 @@ fun HomeView(
                 ) {
                     Column {
                         Text(
-                            text = "${state.defaultTemp}°",
+                            text = "$temp°",
                             fontSize = 62.sp,
                             fontWeight = FontWeight.Light,
                             letterSpacing = (-2).sp,
